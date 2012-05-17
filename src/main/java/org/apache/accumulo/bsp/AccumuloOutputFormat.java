@@ -31,7 +31,7 @@ import org.apache.hama.bsp.RecordWriter;
 public class AccumuloOutputFormat extends org.apache.accumulo.core.client.mapreduce.AccumuloOutputFormat implements OutputFormat<Text,Mutation> {
   
   protected static class BSPRecordWriter extends AccumuloRecordWriter implements RecordWriter<Text,Mutation> {
-    BSPRecordWriter(Configuration conf) throws AccumuloException, AccumuloSecurityException {
+    BSPRecordWriter(Configuration conf) throws AccumuloException, AccumuloSecurityException, IOException {
       super(conf);
     }
     
