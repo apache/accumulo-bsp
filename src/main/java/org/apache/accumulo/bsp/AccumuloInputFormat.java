@@ -27,23 +27,25 @@ import org.apache.hama.bsp.InputFormat;
 import org.apache.hama.bsp.InputSplit;
 import org.apache.hama.bsp.RecordReader;
 
+/**
+ * <p>
+ * AccumuloInputFormat class. To be used with Hama BSP.
+ * </p>
+ * 
+ * @see BSPJob#setInputFormat(Class)
+ */
 public class AccumuloInputFormat extends org.apache.accumulo.core.client.mapreduce.AccumuloInputFormat implements InputFormat<Key,Value> {
+  
   public class BSPRecordReaderBase extends RecordReaderBase<Key,Value> implements RecordReader<Key,Value> {
     public BSPRecordReaderBase(InputSplit split, BSPJob job) throws IOException {
-      this.initialize((BSPRangeInputSplit) split, job.getConf());
+      this.initialize((BSPRangeInputSplit) split, MapreduceWrapper.wrappedTaskAttemptContext(job));
     }
     
-    /*
-     * @see org.apache.hadoop.mapreduce.RecordReader#nextKeyValue()
-     */
     @Override
     public boolean nextKeyValue() throws IOException, InterruptedException {
       return next(currentKey, currentValue);
     }
     
-    /*
-     * @see org.apache.hama.bsp.RecordReader#createKey()
-     */
     @Override
     public Key createKey() {
       if (currentKey == null) {
@@ -53,9 +55,6 @@ public class AccumuloInputFormat extends org.apache.accumulo.core.client.mapredu
       }
     }
     
-    /*
-     * @see org.apache.hama.bsp.RecordReader#createValue()
-     */
     @Override
     public Value createValue() {
       if (currentValue == null) {
@@ -65,17 +64,11 @@ public class AccumuloInputFormat extends org.apache.accumulo.core.client.mapredu
       }
     }
     
-    /*
-     * @see org.apache.hama.bsp.RecordReader#getPos()
-     */
     @Override
     public long getPos() throws IOException {
       return 0;
     }
     
-    /*
-     * @see org.apache.hama.bsp.RecordReader#next(java.lang.Object, java.lang.Object)
-     */
     @Override
     public boolean next(Key k, Value v) throws IOException {
       if (scannerIterator.hasNext()) {
@@ -108,7 +101,7 @@ public class AccumuloInputFormat extends org.apache.accumulo.core.client.mapredu
   
   @Override
   public InputSplit[] getSplits(BSPJob job, int arg1) throws IOException {
-    List<org.apache.hadoop.mapreduce.InputSplit> splits = getSplits(job.getConf());
+    List<org.apache.hadoop.mapreduce.InputSplit> splits = getSplits(MapreduceWrapper.wrappedTaskAttemptContext(job));
     InputSplit[] bspSplits = new BSPRangeInputSplit[splits.size()];
     for (int i = 0; i < splits.size(); i++) {
       bspSplits[i] = new BSPRangeInputSplit((RangeInputSplit) splits.get(i));

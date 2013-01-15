@@ -19,6 +19,7 @@ package org.apache.accumulo.core.client.mapreduce;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -26,7 +27,9 @@ import java.util.Map.Entry;
 
 import org.apache.accumulo.bsp.AccumuloInputFormat;
 import org.apache.accumulo.bsp.AccumuloOutputFormat;
+import org.apache.accumulo.bsp.MapreduceWrapper;
 import org.apache.accumulo.core.client.BatchWriter;
+import org.apache.accumulo.core.client.BatchWriterConfig;
 import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.mock.MockInstance;
@@ -37,6 +40,8 @@ import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapreduce.Job;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.bsp.BSP;
 import org.apache.hama.bsp.BSPJob;
@@ -46,14 +51,17 @@ import org.apache.hama.bsp.sync.SyncException;
 import org.apache.hama.util.KeyValuePair;
 import org.junit.Test;
 
-public class AccumuloOutputFormatTest {
+/**
+ * 
+ */
+public class AccumuloOutputFormatIT {
   
-  static class TestBSP extends BSP<Key,Value,Text,Mutation> {
+  static class OutputFormatTestBSP<M extends Writable> extends BSP<Key,Value,Text,Mutation,M> {
     Key key = null;
     int count = 0;
     
     @Override
-    public void bsp(BSPPeer<Key,Value,Text,Mutation> peer) throws IOException, SyncException, InterruptedException {
+    public void bsp(BSPPeer<Key,Value,Text,Mutation,M> peer) throws IOException, SyncException, InterruptedException {
       // this method reads the next key value record from file
       KeyValuePair<Key,Value> pair;
       
@@ -73,7 +81,7 @@ public class AccumuloOutputFormatTest {
     }
     
     @Override
-    public void cleanup(BSPPeer<Key,Value,Text,Mutation> peer) throws IOException {
+    public void cleanup(BSPPeer<Key,Value,Text,Mutation,M> peer) throws IOException {
       Mutation m = new Mutation("total");
       m.put("", "", Integer.toString(count));
       peer.write(new Text("testtable2"), m);
@@ -81,7 +89,7 @@ public class AccumuloOutputFormatTest {
   }
   
   @Test
-  public void testBSP() throws Exception {
+  public void testBSPOutputFormat() throws Exception {
     MockInstance mockInstance = new MockInstance("testmrinstance");
     Connector c = mockInstance.getConnector("root", new byte[] {});
     if (c.tableOperations().exists("testtable1"))
@@ -91,7 +99,7 @@ public class AccumuloOutputFormatTest {
     
     c.tableOperations().create("testtable1");
     c.tableOperations().create("testtable2");
-    BatchWriter bw = c.createBatchWriter("testtable1", 10000L, 1000L, 4);
+    BatchWriter bw = c.createBatchWriter("testtable1", new BatchWriterConfig());
     for (int i = 0; i < 100; i++) {
       Mutation m = new Mutation(new Text(String.format("%09x", i + 1)));
       m.put(new Text(), new Text(), new Value(String.format("%09x", i).getBytes()));
@@ -100,29 +108,33 @@ public class AccumuloOutputFormatTest {
     bw.close();
     
     Configuration conf = new Configuration();
-    BSPJob bsp = new BSPJob(new HamaConfiguration(conf));
-    bsp.setJobName("Test Input Output");
+    BSPJob bspJob = new BSPJob(new HamaConfiguration(conf));
+    bspJob.setJobName("Test Input Output");
     
-    bsp.setBspClass(TestBSP.class);
-    bsp.setInputFormat(AccumuloInputFormat.class);
-    bsp.setInputPath(new Path("test"));
+    bspJob.setBspClass(OutputFormatTestBSP.class);
+    bspJob.setInputFormat(AccumuloInputFormat.class);
+    bspJob.setInputPath(new Path("test"));
     
-    bsp.setOutputFormat(AccumuloOutputFormat.class);
-    bsp.setOutputPath(new Path("test"));
+    bspJob.setOutputFormat(AccumuloOutputFormat.class);
+    bspJob.setJar("target/integration-tests.jar");
+    bspJob.setOutputPath(new Path("target/bsp-outputformat-test"));
     
-    bsp.setOutputKeyClass(Text.class);
-    bsp.setOutputValueClass(Mutation.class);
+    bspJob.setOutputKeyClass(Text.class);
+    bspJob.setOutputValueClass(Mutation.class);
     
-    AccumuloInputFormat.setInputInfo(bsp.getConf(), "root", "".getBytes(), "testtable1", new Authorizations());
-    AccumuloInputFormat.setMockInstance(bsp.getConf(), "testmrinstance");
-    AccumuloOutputFormat.setOutputInfo(bsp.getConf(), "root", "".getBytes(), false, "testtable2");
-    AccumuloOutputFormat.setMockInstance(bsp.getConf(), "testmrinstance");
+    Job job = MapreduceWrapper.wrappedJob(bspJob);
+    
+    AccumuloInputFormat.setInputInfo(job, "root", "".getBytes(), "testtable1", new Authorizations());
+    AccumuloInputFormat.setMockInstance(job, "testmrinstance");
+    AccumuloOutputFormat.setOutputInfo(job, "root", "".getBytes(), false, "testtable2");
+    AccumuloOutputFormat.setMockInstance(job, "testmrinstance");
     
     AccumuloInputFormat input = new AccumuloInputFormat();
-    InputSplit[] splits = input.getSplits(bsp, 0);
+    InputSplit[] splits = input.getSplits(bspJob, 0);
     assertEquals(splits.length, 1);
     
-    bsp.waitForCompletion(false);
+    if (!bspJob.waitForCompletion(false))
+      fail("Job not finished successfully");
     
     Scanner scanner = c.createScanner("testtable2", new Authorizations());
     Iterator<Entry<Key,Value>> iter = scanner.iterator();
@@ -131,6 +143,6 @@ public class AccumuloOutputFormatTest {
     assertEquals("total", entry.getKey().getRow().toString());
     assertEquals(100, Integer.parseInt(new String(entry.getValue().get())));
     assertFalse(iter.hasNext());
-    
   }
+  
 }

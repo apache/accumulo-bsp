@@ -21,27 +21,34 @@ import java.io.IOException;
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.data.Mutation;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.Text;
 import org.apache.hama.bsp.BSPJob;
 import org.apache.hama.bsp.OutputFormat;
 import org.apache.hama.bsp.RecordWriter;
 
+/**
+ * <p>
+ * AccumuloOutputFormat class. To be used with Hama BSP.
+ * </p>
+ * 
+ * @see BSPJob#setOutputFormat(Class)
+ */
 public class AccumuloOutputFormat extends org.apache.accumulo.core.client.mapreduce.AccumuloOutputFormat implements OutputFormat<Text,Mutation> {
   
   protected static class BSPRecordWriter extends AccumuloRecordWriter implements RecordWriter<Text,Mutation> {
-    BSPRecordWriter(Configuration conf) throws AccumuloException, AccumuloSecurityException, IOException {
-      super(conf);
+    
+    private BSPJob job;
+    
+    BSPRecordWriter(BSPJob job) throws AccumuloException, AccumuloSecurityException, IOException {
+      super(MapreduceWrapper.wrappedTaskAttemptContext(job));
+      this.job = job;
     }
     
-    /*
-     * @see org.apache.hama.bsp.RecordWriter#close()
-     */
     @Override
     public void close() throws IOException {
       try {
-        close(null);
+        close(MapreduceWrapper.wrappedTaskAttemptContext(job));
       } catch (InterruptedException e) {
         throw new IOException(e);
       }
@@ -49,21 +56,15 @@ public class AccumuloOutputFormat extends org.apache.accumulo.core.client.mapred
     
   }
   
-  /*
-   * @see org.apache.hama.bsp.OutputFormat#checkOutputSpecs(org.apache.hadoop.fs.FileSystem, org.apache.hama.bsp.BSPJob)
-   */
   @Override
   public void checkOutputSpecs(FileSystem fs, BSPJob job) throws IOException {
-    checkOutputSpecs(job.getConf());
+    checkOutputSpecs(MapreduceWrapper.wrappedTaskAttemptContext(job));
   }
   
-  /*
-   * @see org.apache.hama.bsp.OutputFormat#getRecordWriter(org.apache.hadoop.fs.FileSystem, org.apache.hama.bsp.BSPJob, java.lang.String)
-   */
   @Override
-  public RecordWriter<Text,Mutation> getRecordWriter(FileSystem fs, BSPJob job, String arg2) throws IOException {
+  public RecordWriter<Text,Mutation> getRecordWriter(FileSystem fs, BSPJob job, String name) throws IOException {
     try {
-      return new BSPRecordWriter(job.getConf());
+      return new BSPRecordWriter(job);
     } catch (Exception e) {
       throw new IOException(e);
     }
