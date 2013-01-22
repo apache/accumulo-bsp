@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 
 import org.apache.accumulo.bsp.AccumuloInputFormat;
 import org.apache.accumulo.bsp.MapreduceWrapper;
@@ -30,7 +31,6 @@ import org.apache.accumulo.core.client.mock.MockInstance;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Value;
-import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -97,7 +97,8 @@ public class AccumuloInputFormatIT {
     bspJob.setBspClass(InputFormatTestBSP.class);
     bspJob.setInputPath(new Path("test"));
     
-    AccumuloInputFormat.setInputInfo(job, "root", "".getBytes(), "testtable", new Authorizations());
+    AccumuloInputFormat.setConnectorInfo(job, "root", "".getBytes(Charset.forName("UTF-8")));
+    AccumuloInputFormat.setInputTableName(job, "testtable");
     AccumuloInputFormat.setMockInstance(job, "testmapinstance");
     
     AccumuloInputFormat input = new AccumuloInputFormat();

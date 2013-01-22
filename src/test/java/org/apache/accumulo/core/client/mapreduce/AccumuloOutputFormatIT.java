@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
@@ -124,9 +125,11 @@ public class AccumuloOutputFormatIT {
     
     Job job = MapreduceWrapper.wrappedJob(bspJob);
     
-    AccumuloInputFormat.setInputInfo(job, "root", "".getBytes(), "testtable1", new Authorizations());
+    AccumuloInputFormat.setConnectorInfo(job, "root", "".getBytes(Charset.forName("UTF-8")));
+    AccumuloInputFormat.setInputTableName(job, "testtable1");
     AccumuloInputFormat.setMockInstance(job, "testmrinstance");
-    AccumuloOutputFormat.setOutputInfo(job, "root", "".getBytes(), false, "testtable2");
+    AccumuloOutputFormat.setConnectorInfo(job, "root", "".getBytes(Charset.forName("UTF-8")));
+    AccumuloOutputFormat.setDefaultTableName(job, "testtable2");
     AccumuloOutputFormat.setMockInstance(job, "testmrinstance");
     
     AccumuloInputFormat input = new AccumuloInputFormat();
